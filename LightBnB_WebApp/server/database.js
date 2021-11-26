@@ -23,7 +23,9 @@ const getUserWithEmail = function(email) {
   const value = [email];
   return pool
     .query(txt, value)
-    .then(res => res.rows)
+    .then(res => {
+      console.log(res.rows)
+    })
     .catch(err => {
       console.log(err.message);
     });
@@ -85,8 +87,10 @@ const getAllReservations = function(guest_id, limit = 10) {
     LIMIT $2;`;
   const values = [guest_id, limit];
   return pool
-    .query(txt, value)
-    .then(res => console.log(res.rows))
+    .query(txt, values)
+    .then(res => {
+      console.log(res.rows)
+    })
     .catch(err => {
       console.log(err.message);
     });
@@ -102,8 +106,74 @@ exports.getAllReservations = getAllReservations;
  * @return {Promise<[{}]>}  A promise to the properties.
  */
 const getAllProperties = function(options, limit = 10) {
+  const values = [];
+  let txt = `
+  SELECT properties.*, avg(property_reviews.rating) as average_rating
+  FROM properties
+  JOIN property_reviews ON properties.id = property_id
+  `;
+
+  // if city filter exist
+  if (options.city) {
+    values.push(`%${options.city}%`);
+    if (txt.includes('WHERE')) {
+      txt += `AND city LIKE $${values.length} `;
+    } else {
+      txt += `WHERE city LIKE $${values.length} `;
+    }
+  }
+
+  // owner_id
+  if (options.owner_id) {
+    values.push(`${options.owner_id}`);
+    if (txt.includes('WHERE')) {
+      txt += `AND owner_id = $${values.length} `;
+    } else {
+      txt += `WHERE owner_id = $${values.length} `;
+    }
+  }
+
+  // min cost
+  if (options.minimum_price_per_night) {
+    values.push(`${options.minimum_price_per_night * 100}`);
+    if (txt.includes('WHERE')) {
+      txt += `AND cost_per_night >= $${values.length} `;
+    } else {
+      txt += `WHERE cost_per_night >= $${values.length} `;
+    }
+  }
+
+  // max cost
+  if (options.maximum_price_per_night) {
+    values.push(`${options.maximum_price_per_night * 100}`);
+    if (txt.includes('WHERE')) {
+      txt += `AND cost_per_night <= $${values.length} `;
+    } else {
+      txt += `WHERE cost_per_night <= $${values.length} `;
+    }
+  }
+
+  // rating
+  if (options.minimum_rating) {
+    values.push(`${options.minimum_rating}`);
+    if (txt.includes('WHERE')) {
+      txt += `AND rating >= $${values.length} `;
+    } else {
+      txt += `WHERE rating >= $${values.length} `;
+    }
+  }
+
+  values.push(limit);
+  txt += `
+  GROUP BY properties.id
+  ORDER BY cost_per_night
+  LIMIT $${values.length};
+  `;
+
+  console.log(txt, values);
+  
   return pool
-    .query(`SELECT * FROM properties LIMIT $1`, [limit])
+    .query(txt, values)
     .then((res) => res.rows)
     .catch((err) => {
       console.log(err.message);
