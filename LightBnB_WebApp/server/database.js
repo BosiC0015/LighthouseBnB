@@ -19,13 +19,10 @@ const getUserWithEmail = function(email) {
   const txt = `
     SELECT id, name, email, password
     FROM users
-    WHERE email LIKE $1`;
+    WHERE email = $1`;
   const value = [email];
-  return pool
-    .query(txt, value)
-    .then(res => {
-      console.log(res.rows)
-    })
+  return pool.query(txt, value)
+    .then(res => res.rows[0])
     .catch(err => {
       console.log(err.message);
     });
@@ -55,7 +52,7 @@ exports.getUserWithId = getUserWithId;
 
 /**
  * Add a new user to the database.
- * @param {{name: string, password: string, email: string}} user
+ * @param {{name, password, email}} user
  * @return {Promise<{}>} A promise to the user.
  */
 const addUser =  function(user) {
@@ -88,9 +85,7 @@ const getAllReservations = function(guest_id, limit = 10) {
   const values = [guest_id, limit];
   return pool
     .query(txt, values)
-    .then(res => {
-      console.log(res.rows)
-    })
+    .then(res => res.rows)
     .catch(err => {
       console.log(err.message);
     });
@@ -162,18 +157,16 @@ const getAllProperties = function(options, limit = 10) {
       txt += `WHERE rating >= $${values.length} `;
     }
   }
-
+  
   values.push(limit);
   txt += `
   GROUP BY properties.id
   ORDER BY cost_per_night
   LIMIT $${values.length};
   `;
-
-  console.log(txt, values);
   
-  return pool
-    .query(txt, values)
+  console.log(txt)
+  return pool.query(txt, values)
     .then((res) => res.rows)
     .catch((err) => {
       console.log(err.message);
@@ -188,9 +181,28 @@ exports.getAllProperties = getAllProperties;
  * @return {Promise<{}>} A promise to the property.
  */
 const addProperty = function(property) {
-  const propertyId = Object.keys(properties).length + 1;
-  property.id = propertyId;
-  properties[propertyId] = property;
-  return Promise.resolve(property);
+  const values = [];
+  const bindMessageCount = [];
+  let count = 1;
+  for (const key in property) {
+    // push the actual value
+    values.push(property[key]);
+    // push the index of the value as "$(index + 1)"
+    bindMessageCount.push(`$${count}`);
+    count++;
+  }
+  console.log(property)
+
+  let txt =`
+  INSERT INTO properties (${Object.keys(property).join()})
+  VALUES(${bindMessageCount.join()})
+  RETURNING *;
+  `;
+
+  return pool.query(txt, values)
+  .then(result => {
+    return result.rows[0];
+  })
+  .catch(err => console.log(err.message));
 }
 exports.addProperty = addProperty;
